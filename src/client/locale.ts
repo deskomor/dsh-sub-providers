@@ -81,5 +81,19 @@ export function useTranslate(locale: LocaleApi): Translate {
   React.useEffect(() => locale.subscribe(() => bump((n) => n + 1)), [locale]);
   // Stable across unrelated renders (safe as a hook dependency), recreated on
   // locale change so a snapshot-capturing bind() always sees fresh strings.
-  return React.useMemo(() => locale.bind(NS), [locale, version]);
+  // Falls back to the bundled English dictionary when the locale service does
+  // not know the namespace (e.g. a duplicate registration was rejected), so
+  // the UI never renders raw keys.
+  return React.useMemo(() => {
+    const t = locale.bind(NS);
+    return (key, params) => {
+      const value = t(key, params);
+      if (value !== key) return value;
+      const template = (en as Record<string, string>)[key];
+      if (template === undefined) return key;
+      return params === undefined
+        ? template
+        : template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
+    };
+  }, [locale, version]);
 }
